@@ -6,6 +6,8 @@ const CLEAR_FLASH_MS = 280;
 const SNAP_RADIUS_CELLS = 1.35;
 const SNAP_OUTSIDE_MARGIN_CELLS = 1.2;
 const TAP_DRAG_THRESHOLD_PX = 8;
+const MOBILE_GRAB_MARGIN_PX = 22;
+const MOBILE_GRAB_MARGIN_SMALL_PX = 18;
 
 const phases = [
   {
@@ -160,6 +162,7 @@ const state = {
   drag: null,
   gameOver: false,
   clearFlash: [],
+  clearColors: {},
   soundEnabled: localStorage.getItem(SOUND_KEY) !== '0',
   ignoreClickUntil: 0
 };
@@ -413,6 +416,7 @@ function renderBoard() {
       }
       if (state.clearFlash.includes(index)) {
         cell.classList.add('clear-flash');
+        cell.style.setProperty('--clear-color', state.clearColors[index] || value?.color || '#ffffff');
       }
       boardEl.appendChild(cell);
     }
@@ -439,11 +443,6 @@ function createPieceElement(piece, options = {}) {
     pieceEl.appendChild(block);
   });
 
-  if (!forGhost) {
-    pieceEl.addEventListener('pointerdown', startDrag);
-    pieceEl.addEventListener('click', handlePieceClick);
-  }
-
   return pieceEl;
 }
 
@@ -458,6 +457,10 @@ function renderTray() {
 
     if (!piece.used) {
       const pieceEl = createPieceElement(piece);
+      pieceEl.addEventListener('pointerdown', startDrag);
+      pieceEl.addEventListener('click', handlePieceClick);
+      slot.addEventListener('pointerdown', handlePieceSlotPointerDown);
+      slot.addEventListener('click', handlePieceSlotClick);
       slot.appendChild(pieceEl);
     } else {
       slot.innerHTML = '<span class="label">Usada</span>';
@@ -481,6 +484,29 @@ function updateHud() {
 function clearPreview() {
   boardEl.querySelectorAll('.board-cell').forEach((cell) => {
     cell.classList.remove('preview-valid', 'preview-invalid');
+  });
+}
+
+function spawnLineSparkles(clearedIndexes) {
+  if (!clearedIndexes.length) return;
+  const boardRect = boardEl.getBoundingClientRect();
+  const maxSparkles = Math.min(22, clearedIndexes.length * 2);
+
+  clearedIndexes.slice(0, maxSparkles).forEach((index, order) => {
+    const cell = boardEl.children[index];
+    if (!cell) return;
+    const cellRect = cell.getBoundingClientRect();
+    const sparkle = document.createElement('span');
+    sparkle.className = 'line-sparkle';
+    const color = state.clearColors[index] || '#ffffff';
+    sparkle.style.setProperty('--spark-color', color);
+    sparkle.style.setProperty('--spark-x', String(Math.random().toFixed(2)));
+    sparkle.style.setProperty('--spark-y', String(Math.random().toFixed(2)));
+    sparkle.style.left = `${cellRect.left - boardRect.left + cellRect.width / 2}px`;
+    sparkle.style.top = `${cellRect.top - boardRect.top + cellRect.height / 2}px`;
+    sparkle.style.animationDelay = `${(order % 6) * 18}ms`;
+    boardEl.appendChild(sparkle);
+    window.setTimeout(() => sparkle.remove(), 760);
   });
 }
 
@@ -646,11 +672,14 @@ function simulatePlacement(board, piece, originX, originY, color = '#fff') {
 
   const { rows, cols } = getCompletedLines(next);
   const clearedIndexes = [];
+  const clearColors = {};
 
   rows.forEach((row) => {
     for (let x = 0; x < BOARD_SIZE; x++) {
-      clearedIndexes.push(cellIndex(x, row));
-      next[cellIndex(x, row)] = null;
+      const idx = cellIndex(x, row);
+      clearedIndexes.push(idx);
+      clearColors[idx] = next[idx]?.color || color;
+      next[idx] = null;
     }
   });
 
@@ -658,6 +687,7 @@ function simulatePlacement(board, piece, originX, originY, color = '#fff') {
     for (let y = 0; y < BOARD_SIZE; y++) {
       const idx = cellIndex(col, y);
       if (!clearedIndexes.includes(idx)) clearedIndexes.push(idx);
+      if (!clearColors[idx]) clearColors[idx] = next[idx]?.color || color;
       next[idx] = null;
     }
   });
@@ -667,7 +697,8 @@ function simulatePlacement(board, piece, originX, originY, color = '#fff') {
     rows,
     cols,
     lines: rows.length + cols.length,
-    clearedIndexes
+    clearedIndexes,
+    clearColors
   };
 }
 
@@ -820,6 +851,7 @@ function placePiece(pieceId, x, y) {
   state.board = result.board;
   piece.used = true;
   state.clearFlash = result.clearedIndexes;
+  state.clearColors = result.clearColors || {};
   addScore(piece.area, result.lines);
   state.selectedPieceId = null;
   renderBoard();
@@ -828,11 +860,15 @@ function placePiece(pieceId, x, y) {
 
   playSound('place');
   if (result.lines > 0) {
+    boardEl.classList.add('board-clearing');
+    spawnLineSparkles(result.clearedIndexes);
     playSound('clear', { lines: result.lines, combo: state.combo });
   }
 
   window.setTimeout(() => {
     state.clearFlash = [];
+    state.clearColors = {};
+    boardEl.classList.remove('board-clearing');
     renderBoard();
   }, CLEAR_FLASH_MS);
 
@@ -866,6 +902,8 @@ function resetGame() {
   state.selectedPieceId = null;
   state.gameOver = false;
   state.clearFlash = [];
+  state.clearColors = {};
+  boardEl.classList.remove('board-clearing');
   updateHud();
   renderBoard();
   loadNewTrio();
@@ -923,21 +961,32 @@ function boardClickPlace(event) {
   }
 }
 
-function startDrag(event) {
+function isMobileGrabAssistEnabled() {
+  return window.matchMedia('(max-width: 820px)').matches || window.matchMedia('(pointer: coarse)').matches;
+}
+
+function getPieceGrabMarginPx(pieceEl) {
+  const biggestSide = Math.max(pieceEl.offsetWidth || 0, pieceEl.offsetHeight || 0);
+  return biggestSide <= 60 ? MOBILE_GRAB_MARGIN_PX : MOBILE_GRAB_MARGIN_SMALL_PX;
+}
+
+function beginDragFromPieceEl(pieceEl, event, forcedClientX = null, forcedClientY = null) {
   if (state.gameOver) return;
   if (event.button !== undefined && event.button !== 0) return;
   event.preventDefault();
   ensureAudio();
 
-  const pieceId = Number(event.currentTarget.dataset.pieceId);
+  const pieceId = Number(pieceEl.dataset.pieceId);
   const piece = state.pieces.find((p) => p.id === pieceId);
   if (!piece || piece.used) return;
 
-  const pieceRect = event.currentTarget.getBoundingClientRect();
+  const pieceRect = pieceEl.getBoundingClientRect();
+  const eventClientX = forcedClientX ?? event.clientX;
+  const eventClientY = forcedClientY ?? event.clientY;
   const unitX = pieceRect.width / piece.width;
   const unitY = pieceRect.height / piece.height;
-  const localX = Math.max(0, Math.min(pieceRect.width - 1, event.clientX - pieceRect.left));
-  const localY = Math.max(0, Math.min(pieceRect.height - 1, event.clientY - pieceRect.top));
+  const localX = Math.max(0, Math.min(pieceRect.width - 1, eventClientX - pieceRect.left));
+  const localY = Math.max(0, Math.min(pieceRect.height - 1, eventClientY - pieceRect.top));
   const anchorX = Math.floor(localX / unitX);
   const anchorY = Math.floor(localY / unitY);
   const anchorOffsetX = localX / unitX;
@@ -949,10 +998,10 @@ function startDrag(event) {
   ghost.classList.add('piece-ghost');
   document.body.appendChild(ghost);
 
-  event.currentTarget.classList.add('dragging-source');
-  if (event.currentTarget.setPointerCapture && event.pointerId !== undefined) {
+  pieceEl.classList.add('dragging-source');
+  if (pieceEl.setPointerCapture && event.pointerId !== undefined) {
     try {
-      event.currentTarget.setPointerCapture(event.pointerId);
+      pieceEl.setPointerCapture(event.pointerId);
     } catch (_) {
       // ignore capture failures
     }
@@ -962,13 +1011,13 @@ function startDrag(event) {
     pieceId,
     piece,
     ghost,
-    sourceEl: event.currentTarget,
+    sourceEl: pieceEl,
     anchorX,
     anchorY,
     anchorOffsetX,
     anchorOffsetY,
-    startX: event.clientX,
-    startY: event.clientY,
+    startX: eventClientX,
+    startY: eventClientY,
     pointerId: event.pointerId,
     moved: false,
     snappedPlacement: null,
@@ -977,12 +1026,58 @@ function startDrag(event) {
   };
 
   playSound('pickup');
-  updateGhostPosition(state.drag, event.clientX, event.clientY, false);
-  updateDragPreview(event.clientX, event.clientY);
+  updateGhostPosition(state.drag, eventClientX, eventClientY, false);
+  updateDragPreview(eventClientX, eventClientY);
 
   window.addEventListener('pointermove', onDragMove);
   window.addEventListener('pointerup', endDrag, { once: true });
   window.addEventListener('pointercancel', cancelPointerDrag, { once: true });
+}
+
+function handlePieceSlotPointerDown(event) {
+  if (!isMobileGrabAssistEnabled()) return;
+  if (event.target.closest('.piece')) return;
+
+  const slotEl = event.currentTarget;
+  const pieceEl = slotEl.querySelector('.piece');
+  if (!pieceEl) return;
+
+  const pieceRect = pieceEl.getBoundingClientRect();
+  const margin = getPieceGrabMarginPx(pieceEl);
+  const withinExpandedBounds =
+    event.clientX >= pieceRect.left - margin &&
+    event.clientX <= pieceRect.right + margin &&
+    event.clientY >= pieceRect.top - margin &&
+    event.clientY <= pieceRect.bottom + margin;
+
+  if (!withinExpandedBounds) return;
+
+  const clampedX = Math.max(pieceRect.left + 1, Math.min(pieceRect.right - 1, event.clientX));
+  const clampedY = Math.max(pieceRect.top + 1, Math.min(pieceRect.bottom - 1, event.clientY));
+  beginDragFromPieceEl(pieceEl, event, clampedX, clampedY);
+}
+
+function handlePieceSlotClick(event) {
+  if (!isMobileGrabAssistEnabled()) return;
+  if (event.target.closest('.piece')) return;
+
+  const pieceEl = event.currentTarget.querySelector('.piece');
+  if (!pieceEl) return;
+
+  const pieceRect = pieceEl.getBoundingClientRect();
+  const margin = getPieceGrabMarginPx(pieceEl);
+  const withinExpandedBounds =
+    event.clientX >= pieceRect.left - margin &&
+    event.clientX <= pieceRect.right + margin &&
+    event.clientY >= pieceRect.top - margin &&
+    event.clientY <= pieceRect.bottom + margin;
+
+  if (!withinExpandedBounds) return;
+  handlePieceClick({ currentTarget: pieceEl });
+}
+
+function startDrag(event) {
+  beginDragFromPieceEl(event.currentTarget, event);
 }
 
 function updateGhostPosition(dragState, clientX, clientY, preferSnap) {
