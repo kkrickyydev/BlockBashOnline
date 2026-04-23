@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Block Bash Web</title>
+  <meta name="google-adsense-account" content="ca-pub-0000000000000000" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <script>
+    window.BLOCKBASH_ADS = {
+      enabled: false,
+      publisherId: 'ca-pub-0000000000000000',
+      slots: {
+        sidebarLeft: '0000000001',
+        sidebarRight: '0000000002',
+        bottom: '0000000003'
+      }
+    };
+  </script>
+</head>
+<body>
+  <div class="site-frame">
+    <aside class="ad-rail ad-rail-left">
+      <div class="ad-card card ad-card-sticky">
+        <p class="ad-label">Publicidade</p>
+        <div class="ad-slot ad-slot-vertical" data-ad-position="sidebar-left"></div>
+      </div>
+    </aside>
+
+    <div class="app-shell">
+      <header class="topbar card">
+        <div>
+          <p class="eyebrow">Puzzle web</p>
+          <h1>Block Bash Web</h1>
+          <p class="subtle">Inspirado no estilo de puzzle 8x8 com 3 peças por rodada.</p>
+        </div>
+        <div class="header-actions">
+          <button id="sound-btn" class="btn btn-secondary" aria-pressed="true">Som: ligado</button>
+          <button id="new-game-btn" class="btn btn-primary">Novo jogo</button>
+          <button id="help-btn" class="btn btn-secondary">Como jogar</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="board-panel card">
+          <div class="board-head">
+            <div>
+              <span class="label">Fase</span>
+              <strong id="phase-name">Aurora</strong>
+            </div>
+            <div>
+              <span class="label">Linhas</span>
+              <strong id="lines-count">0</strong>
+            </div>
+            <div>
+              <span class="label">Combo</span>
+              <strong id="combo-count">x0</strong>
+            </div>
+          </div>
+
+          <div id="board" class="board" aria-label="Tabuleiro do jogo"></div>
+
+          <div class="status-row">
+            <div class="score-card">
+              <span class="label">Pontuação</span>
+              <strong id="score">0</strong>
+            </div>
+            <div class="score-card">
+              <span class="label">Recorde</span>
+              <strong id="best-score">0</strong>
+            </div>
+            <div class="score-card">
+              <span class="label">IA das peças</span>
+              <strong id="solver-status">Pronta</strong>
+            </div>
+          </div>
+        </section>
+
+        <aside class="sidebar">
+          <section class="card tray-panel">
+            <div class="tray-head">
+              <div>
+                <p class="eyebrow">Rodada atual</p>
+                <h2>Peças</h2>
+              </div>
+              <p class="tray-tip">Arraste para o tabuleiro. Agora o encaixe usa snap inteligente e tolerância curta.</p>
+            </div>
+            <div id="tray" class="tray"></div>
+          </section>
+</aside>
+      </main>
+
+      <section class="ad-banner-wrap card">
+        <div class="ad-banner-head">
+          <p class="ad-label">Publicidade</p>
+          <span class="subtle">Espaço abaixo do jogo para banner responsivo</span>
+        </div>
+        <div class="ad-slot ad-slot-horizontal" data-ad-position="bottom"></div>
+      </section>
+    </div>
+
+    <aside class="ad-rail ad-rail-right">
+      <div class="ad-card card ad-card-sticky">
+        <p class="ad-label">Publicidade</p>
+        <div class="ad-slot ad-slot-vertical" data-ad-position="sidebar-right"></div>
+      </div>
+    </aside>
+  </div>
+
+  <div id="modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card card">
+      <h2 id="modal-title">Como jogar</h2>
+      <div id="modal-body"></div>
+      <button id="modal-close" class="btn btn-primary">Fechar</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
