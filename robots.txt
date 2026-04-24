@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kkrickydev.github.io/BlockBashOnline/sitemap.xml
